@@ -1,1 +1,8 @@
+const alarmOSP = new Audio("sounds/selektywne.mp3");
 
+function alarmujOSP() {
+    alarmOSP.currentTime = 0;
+    alarmOSP.play().catch(error => {
+        console.error("Nie udało się odtworzyć alarmu:", error);
+    });
+}
