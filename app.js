@@ -1,13 +1,18 @@
 
-const $ = s => document.querySelector(s);
-const $$ = s => [...document.querySelectorAll(s)];
+'use strict';
+
+const $ = selector => document.querySelector(selector);
+const $$ = selector => [...document.querySelectorAll(selector)];
 
 const now = () => new Date();
 const pad = n => String(n).padStart(2, '0');
+
 const dateStr = d =>
   `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+
 const timeStr = d =>
   `${pad(d.getHours())}:${pad(d.getMinutes())}`;
+
 const stamp = () =>
   `${pad(now().getHours())}:${pad(now().getMinutes())}:${pad(now().getSeconds())}`;
 
@@ -38,269 +43,304 @@ const defaultUnits = [
   }
 ];
 
-// Wczytanie zapisanych jednostek z kontrolą zgodności z nową listą.
-function loadUnits() {
+function readStorage(key, fallback) {
   try {
-    const saved = JSON.parse(localStorage.getItem('swdUnits') || 'null');
-    if (
-      Array.isArray(saved) &&
-      saved.length === 4 &&
-      saved.some(u => u.name && u.name.includes('LF 339-66')) &&
-      saved.some(u => u.name && u.name.includes('LF 301-25'))
-    ) {
-      return saved.map((u, i) => ({
-        ...defaultUnits[i],
-        ...u,
-        group: defaultUnits[i].group
-      }));
-    }
-  } catch (e) {
-    console.warn('Nie udało się wczytać jednostek:', e);
+    const value = JSON.parse(localStorage.getItem(key) || 'null');
+    return value ?? fallback;
+  } catch (error) {
+    console.warn(`Nie udało się odczytać ${key}:`, error);
+    return fallback;
   }
-  return defaultUnits.map(u => ({ ...u }));
 }
 
-let units = loadUnits();
+function loadUnits() {
+  const saved = readStorage('swdUnits', null);
+
+  // Używamy wyłącznie aktualnie ustalonej listy czterech zastępów.
+  // Zachowujemy ich zapisane statusy, jeśli pasują do nazw.
+  if (!Array.isArray(saved)) {
+    return defaultUnits.map(unit => ({ ...unit }));
+  }
+
+  return defaultUnits.map(unit => {
+    const previous = saved.find(item =>
+      item && item.name && item.name.startsWith(unit.name.split(' | ')[0])
+    );
+
+    return {
+      ...unit,
+      status: previous?.status || 'Gotowy'
+    };
+  });
+}
 
 function loadEvents() {
-  try {
-    const saved = JSON.parse(localStorage.getItem('swdEvents') || 'null');
-    if (Array.isArray(saved)) {
-      return saved.map(e => ({
-        ...e,
-        units: Array.isArray(e.units) ? e.units.filter(i => i >= 0 && i < 4) : [],
-        status: e.status || 'W toku'
-      }));
-    }
-  } catch (e) {
-    console.warn('Nie udało się wczytać zdarzeń:', e);
+  const saved = readStorage('swdEvents', null);
+
+  if (Array.isArray(saved)) {
+    return saved.map(event => ({
+      ...event,
+      units: Array.isArray(event.units)
+        ? event.units.filter(i => Number.isInteger(i) && i >= 0 && i < 4)
+        : [],
+      status: event.status || 'W toku',
+      lead: event.lead || 'SKKM Lublin'
+    }));
   }
 
   return [
     {
-      id: '2026/001',
-      date: '2026-10-26',
-      time: '20:22',
+      id: `${now().getFullYear()}/001`,
+      date: dateStr(now()),
+      time: timeStr(now()),
       town: 'Lublin',
       address: 'al. Warszawska 12',
       type: 'MZ',
       description: 'Powalone drzewo blokuje jeden pas jezdni.',
       status: 'W toku',
-      lead: 'JRG 1 Lublin',
-      units: [],
-      channel: 'Telefon'
+      lead: 'SKKM Lublin',
+      units: [1],
+      channel: 'Telefon',
+      notes: ''
     },
     {
-      id: '2026/002',
-      date: '2026-10-26',
-      time: '19:40',
+      id: `${now().getFullYear()}/002`,
+      date: dateStr(now()),
+      time: timeStr(now()),
       town: 'Jastków',
       address: 'ul. Lubelska 8',
       type: 'P',
-      description: 'Zadymienie w budynku mieszkalnym. Zgłaszający oczekuje przed obiektem.',
+      description: 'Zadymienie w budynku mieszkalnym.',
       status: 'W toku',
-      lead: 'JRG 1 Lublin',
-      units: [],
-      channel: 'Telefon'
+      lead: 'SKKM Lublin',
+      units: [2, 3],
+      channel: 'Telefon',
+      notes: ''
     },
     {
-      id: '2026/003',
-      date: '2026-10-26',
-      time: '18:12',
+      id: `${now().getFullYear()}/003`,
+      date: dateStr(now()),
+      time: timeStr(now()),
       town: 'Moszenki',
       address: 'ul. Szkolna 4',
       type: 'AF',
       description: 'Uruchomienie czujki — brak potwierdzenia pożaru.',
       status: 'Zakończone',
-      lead: 'JRG 1 Lublin',
+      lead: 'SKKM Lublin',
       units: [],
-      channel: 'Telefon'
+      channel: 'System alarmowy',
+      notes: ''
     }
   ];
 }
 
+let units = loadUnits();
 let events = loadEvents();
 let selected = events[0]?.id || null;
-
-let radio = {};
-try {
-  radio = JSON.parse(localStorage.getItem('swdRadio') || '{}') || {};
-} catch (e) {
-  radio = {};
-}
+let radio = readStorage('swdRadio', {});
 
 function save() {
-  localStorage.setItem('swdUnits', JSON.stringify(units));
-  localStorage.setItem('swdEvents', JSON.stringify(events));
-  localStorage.setItem('swdRadio', JSON.stringify(radio));
+  try {
+    localStorage.setItem('swdUnits', JSON.stringify(units));
+    localStorage.setItem('swdEvents', JSON.stringify(events));
+    localStorage.setItem('swdRadio', JSON.stringify(radio));
+  } catch (error) {
+    console.warn('Nie udało się zapisać danych:', error);
+  }
 }
 
-function esc(s = '') {
-  return String(s).replace(/[&<>"']/g, c => ({
+function esc(value = '') {
+  return String(value).replace(/[&<>"']/g, char => ({
     '&': '&amp;',
     '<': '&lt;',
     '>': '&gt;',
     '"': '&quot;',
     "'": '&#39;'
-  }[c]));
+  })[char]);
 }
 
-function unitStatus(u) {
-  return u.status === 'Gotowy'
-    ? ''
-    : u.status === 'Wyłączony'
-      ? 'off'
-      : 'busy';
+function unitStatus(unit) {
+  if (unit.status === 'Gotowy') return '';
+  if (unit.status === 'Wyłączony') return 'off';
+  return 'busy';
 }
 
-function getStatusClass(status) {
-  const s = String(status || '').toLowerCase();
+function statusClass(status) {
+  const value = String(status || '').toLowerCase();
 
-  if (
-    s.includes('nowe') ||
-    s.includes('przyjęte') ||
-    s.includes('przyjete')
-  ) {
+  if (value.includes('nowe') || value.includes('przyjęte')) {
     return 'status-new';
   }
 
-  if (s.includes('opanowane')) {
+  if (value.includes('opanowane')) {
     return 'status-controlled';
   }
 
-  if (
-    s.includes('zakończone') ||
-    s.includes('zakonczone')
-  ) {
+  if (value.includes('zakończone')) {
     return 'status-finished';
   }
 
   return 'status-progress';
 }
 
-function getActiveTab() {
+function eventTypeName(type) {
+  return ({
+    P: 'Pożar',
+    MZ: 'Miejscowe zagrożenie',
+    AF: 'Alarm fałszywy',
+    CW: 'Ćwiczenia'
+  })[type] || 'Inne zdarzenie';
+}
+
+function currentTab() {
   return document.querySelector('[data-tab].active')?.dataset.tab || 'PSP';
 }
 
 function renderUnits() {
-  const activeTab = getActiveTab();
-  const visibleUnits = units
-    .map((u, i) => ({ ...u, i }))
-    .filter(u => u.group === activeTab);
+  const tab = currentTab();
+
+  const visible = units
+    .map((unit, index) => ({ ...unit, index }))
+    .filter(unit => unit.group === tab);
 
   const groups = {};
-  visibleUnits.forEach(u => {
-    (groups[u.station] ??= []).push(u);
+
+  visible.forEach(unit => {
+    (groups[unit.station] ??= []).push(unit);
   });
 
   $('#unitColumns').innerHTML = Object.entries(groups)
-    .map(([station, arr]) => `
+    .map(([station, list]) => `
       <div class="unit-column">
         <h3>${esc(station)}</h3>
-        ${arr.map(u => `
-          <div class="vehicle" title="${esc(u.status)}">
-            <i class="dot ${unitStatus(u)}"></i>
-            ${esc(u.name)}
-            <span style="margin-left:auto;color:#555">${esc(u.status)}</span>
+        ${list.map(unit => `
+          <div class="vehicle" title="${esc(unit.status)}">
+            <i class="dot ${unitStatus(unit)}"></i>
+            <span>${esc(unit.name)}</span>
+            <span style="margin-left:auto;white-space:nowrap">
+              ${esc(unit.status)}
+            </span>
           </div>
         `).join('')}
       </div>
     `).join('');
 
-  $('#radioUnit').innerHTML = units.map((u, i) => `
-    <option value="${i}">
-      ${esc(u.group)} — ${esc(u.name)}
+  $('#unitCount').textContent = `${units.length} zastępy`;
+
+  $('#radioUnit').innerHTML = units.map((unit, index) => `
+    <option value="${index}">
+      ${esc(unit.group)} — ${esc(unit.name)}
     </option>
   `).join('');
 }
 
 function renderEvents() {
-  const q = ($('#search')?.value || '').toLowerCase();
+  const query = ($('#search').value || '').trim().toLowerCase();
 
-  const filtered = events.filter(e =>
-    `${e.id} ${e.town} ${e.address} ${e.description}`
-      .toLowerCase()
-      .includes(q)
+  const filtered = events.filter(event =>
+    [
+      event.id,
+      event.town,
+      event.address,
+      event.description,
+      event.type,
+      event.status
+    ].join(' ').toLowerCase().includes(query)
   );
 
-  $('#eventsBody').innerHTML = filtered.map(e => `
+  $('#eventsBody').innerHTML = filtered.map(event => `
     <tr
-      data-id="${esc(e.id)}"
-      class="${getStatusClass(e.status)} ${e.id === selected ? 'selected' : ''}"
+      data-id="${esc(event.id)}"
+      class="${statusClass(event.status)} ${event.id === selected ? 'selected' : ''}"
     >
-      <td>${esc(e.id)}</td>
-      <td>${esc(e.date)} ${esc(e.time)}</td>
-      <td>${esc(e.lead || 'JRG 1 Lublin')}</td>
-      <td>${esc(e.town)}, ${esc(e.address)}</td>
-      <td>${e.units.length}</td>
-      <td>${esc(e.type)}</td>
-      <td>${esc(e.description)}</td>
-      <td>${esc(e.status)}</td>
+      <td>${esc(event.id)}</td>
+      <td>${esc(event.date)} ${esc(event.time)}</td>
+      <td>${esc(event.town)}, ${esc(event.address)}</td>
+      <td>${esc(event.type)}</td>
+      <td>${esc(event.description)}</td>
+      <td>${event.units.length}</td>
+      <td>${esc(event.status)}</td>
     </tr>
   `).join('');
 
-  $$('#eventsBody tr').forEach(tr => {
-    tr.onclick = () => {
-      selected = tr.dataset.id;
+  $$('#eventsBody tr').forEach(row => {
+    row.addEventListener('click', () => {
+      selected = row.dataset.id;
       renderAll();
-    };
+    });
   });
 
   renderDetails();
 }
 
 function renderDetails() {
-  const e = events.find(x => x.id === selected);
+  const event = events.find(item => item.id === selected);
 
-  $('#detailNo').textContent = e?.id || '—';
-  $('#radioEvent').textContent = e?.id || 'brak zdarzenia';
+  $('#detailNo').textContent = event?.id || '—';
+  $('#radioEvent').textContent = event?.id || 'Brak zdarzenia';
 
-  $('#selectedInfo').textContent = e
-    ? `${e.id} — ${e.town}, ${e.address} | ${e.status}`
-    : 'Wybierz zdarzenie';
+  $('#selectedInfo').textContent = event
+    ? `${event.id} — ${event.town}, ${event.address} | ${event.status}`
+    : 'Nie wybrano zdarzenia';
 
-  $('#details').innerHTML = e
+  $('#details').innerHTML = event
     ? `
       <div class="details-grid">
         <b>Rodzaj:</b>
-        <span>${esc(e.type)} — ${esc(({
-          P: 'Pożar',
-          MZ: 'Miejscowe zagrożenie',
-          AF: 'Alarm fałszywy',
-          CW: 'Ćwiczenia',
-          WG: 'Wypadek',
-          BL: 'Zdarzenie budowlane',
-          ZPR: 'Zdarzenie',
-          PZR: 'Zdarzenie'
-        })[e.type] || 'Zdarzenie')}</span>
+        <span>${esc(event.type)} — ${esc(eventTypeName(event.type))}</span>
 
-        <b>Adres:</b>
-        <span>${esc(e.town)}, ${esc(e.address)}</span>
+        <b>Data:</b>
+        <span>${esc(event.date)} ${esc(event.time)}</span>
+
+        <b>Miejsce:</b>
+        <span>${esc(event.town)}, ${esc(event.address)}</span>
+
+        <b>Obiekt:</b>
+        <span>${esc(event.object || 'Nie podano')}</span>
 
         <b>Opis:</b>
-        <span>${esc(e.description)}</span>
+        <span>${esc(event.description)}</span>
 
         <b>Status:</b>
-        <span>${esc(e.status)}</span>
+        <span>${esc(event.status)}</span>
+
+        <b>Przyjęto przez:</b>
+        <span>${esc(event.lead)}</span>
+
+        <b>Kanał:</b>
+        <span>${esc(event.channel || 'Nie podano')}</span>
+
+        <b>Zgłaszający:</b>
+        <span>${esc(event.caller || 'Nie podano')}</span>
+
+        <b>Telefon:</b>
+        <span>${esc(event.phone || 'Nie podano')}</span>
+
+        <b>Uwagi:</b>
+        <span>${esc(event.notes || 'Brak')}</span>
 
         <b>Zastępy:</b>
         <span>
-          ${e.units.map(i => esc(units[i]?.name || '')).filter(Boolean).join('<br>') || 'Brak zadysponowanych zastępów'}
+          ${event.units
+            .map(index => units[index]?.name)
+            .filter(Boolean)
+            .map(esc)
+            .join('<br>') || 'Brak zadysponowanych zastępów'}
         </span>
       </div>
     `
-    : '<p>Wybierz zdarzenie, aby zobaczyć szczegóły.</p>';
+    : '<p>Wybierz zdarzenie z rejestru.</p>';
 
-  const msgs = radio[e?.id] || [];
+  const messages = radio[event?.id] || [];
 
-  $('#radioLog').innerHTML = msgs.map(m => `
-    <div class="radio-message ${m.sender.includes('OSP') ? 'unit' : 'dispatch'}">
+  $('#radioLog').innerHTML = messages.map(message => `
+    <div class="radio-message ${message.sender.includes('OSP') ? 'unit' : 'dispatch'}">
       <div class="meta">
-        ${esc(m.time)}　${esc(m.sender)} → ${esc(m.to || 'kanał zdarzenia')}
+        ${esc(message.time)}　${esc(message.sender)} → ${esc(message.to || 'kanał zdarzenia')}
       </div>
-      ${esc(m.text)}
+      ${esc(message.text)}
     </div>
-  `).join('') || '<span style="color:#777">Brak korespondencji dla tego zdarzenia.</span>';
+  `).join('') || '<span>Brak korespondencji.</span>';
 
   $('#radioLog').scrollTop = $('#radioLog').scrollHeight;
 }
@@ -311,231 +351,302 @@ function renderAll() {
   save();
 }
 
-function playFormatkaSound() {
+function playAlarm() {
   const audio = new Audio('sounds/selektywne.mp3');
   audio.volume = 1;
-  audio.play().catch(() => {
-    console.warn('Przeglądarka zablokowała dźwięk. Kliknij stronę i spróbuj ponownie.');
+
+  audio.play().catch(error => {
+    console.warn('Nie udało się odtworzyć alarmu:', error);
   });
 }
 
-function openModal() {
-  const f = $('#eventForm');
-  f.reset();
-  f.date.value = dateStr(now());
-  f.time.value = timeStr(now());
+function openEventModal() {
+  const form = $('#eventForm');
+  form.reset();
+
+  form.elements.date.value = dateStr(now());
+  form.elements.time.value = timeStr(now());
+
   $('#eventModal').classList.remove('hidden');
 }
 
-function closeModal() {
+function closeEventModal() {
   $('#eventModal').classList.add('hidden');
 }
 
-$('#newEvent').onclick = openModal;
-$('#closeModal').onclick = closeModal;
-$('#cancelModal').onclick = closeModal;
-$('#search').oninput = renderEvents;
+$('#newEvent').addEventListener('click', openEventModal);
+$('#closeModal').addEventListener('click', closeEventModal);
+$('#cancelModal').addEventListener('click', closeEventModal);
+$('#search').addEventListener('input', renderEvents);
 
-$('#eventForm').onsubmit = e => {
-  e.preventDefault();
+$('#eventForm').addEventListener('submit', event => {
+  event.preventDefault();
 
-  const f = e.target;
-  const d = new FormData(f);
-  const n = events.reduce(
-    (m, x) => Math.max(m, Number(x.id.split('/').pop()) || 0),
-    0
-  ) + 1;
+  const form = event.currentTarget;
+  const data = new FormData(form);
 
-  const ev = {
-    id: `2026/${String(n).padStart(3, '0')}`,
-    date: d.get('date'),
-    time: d.get('time'),
-    town: d.get('town'),
-    address: d.get('address'),
-    type: d.get('type'),
-    description: d.get('description'),
+  const nextNumber = events.reduce((max, item) => {
+    const number = Number(item.id.split('/').pop()) || 0;
+    return Math.max(max, number);
+  }, 0) + 1;
+
+  const incident = {
+    id: `${now().getFullYear()}/${String(nextNumber).padStart(3, '0')}`,
+    date: data.get('date'),
+    time: data.get('time'),
+    town: String(data.get('town') || '').trim(),
+    address: String(data.get('address') || '').trim(),
+    object: String(data.get('object') || '').trim(),
+    type: data.get('type'),
+    description: String(data.get('description') || '').trim(),
     status: 'Nowe zgłoszenie',
-    lead: d.get('lead') || d.get('station') || 'JRG 1 Lublin',
+    lead: String(data.get('lead') || 'SKKM Lublin').trim(),
+    caller: String(data.get('caller') || '').trim(),
+    phone: String(data.get('phone') || '').trim(),
     units: [],
-    notes: d.get('notes'),
-    channel: d.get('channel')
+    notes: String(data.get('notes') || '').trim(),
+    channel: data.get('channel'),
+    services: {
+      prm: form.elements.prm.checked,
+      police: form.elements.police.checked,
+      gas: form.elements.gas.checked,
+      energy: form.elements.energy.checked
+    }
   };
 
-  events.unshift(ev);
-  selected = ev.id;
-  closeModal();
+  events.unshift(incident);
+  selected = incident.id;
+
+  closeEventModal();
   renderAll();
-  playFormatkaSound();
+  playAlarm();
 
   addMessage(
     'SKKM Lublin',
-    `Przyjęto zgłoszenie ${ev.id}: ${ev.type}, ${ev.town}, ${ev.address}.`,
+    `Przyjęto zgłoszenie ${incident.id}: ${incident.type}, ${incident.town}, ${incident.address}.`,
     ''
   );
-};
+});
 
-function addMessage(sender, text, to) {
-  const e = events.find(x => x.id === selected);
+function addMessage(sender, text, to = '') {
+  const event = events.find(item => item.id === selected);
 
-  if (!e) {
+  if (!event) {
     alert('Najpierw wybierz zdarzenie.');
     return;
   }
 
-  radio[e.id] ??= [];
-  radio[e.id].push({ sender, text, to, time: stamp() });
+  radio[event.id] ??= [];
+  radio[event.id].push({
+    sender,
+    text,
+    to,
+    time: stamp()
+  });
 
   renderDetails();
   save();
 }
 
-$$('[data-radio]').forEach(b => {
-  b.onclick = () => {
-    const u = units[Number($('#radioUnit').value)];
-    const sender = [
-      'Przyjąłem',
-      'Prawidłowo',
-      'Zrozumiałem'
-    ].includes(b.dataset.radio)
-      ? 'SKKM Lublin'
-      : u?.station || 'OSP';
+$$('[data-radio]').forEach(button => {
+  button.addEventListener('click', () => {
+    const unit = units[Number($('#radioUnit').value)];
+    const selectedSender = $('#radioSender').value;
 
-    addMessage(sender, b.dataset.radio, u?.station || '');
-  };
+    const sender = selectedSender === 'Jednostka OSP'
+      ? (unit?.station || 'OSP')
+      : selectedSender;
+
+    addMessage(sender, button.dataset.radio, 'kanał zdarzenia');
+  });
 });
 
-$('#sendRadio').onclick = () => {
+$('#sendRadio').addEventListener('click', () => {
   const text = $('#radioText').value.trim();
+
   if (!text) return;
 
-  let sender = $('#radioSender').value;
-  const u = units[Number($('#radioUnit').value)];
+  const selectedSender = $('#radioSender').value;
+  const unit = units[Number($('#radioUnit').value)];
 
-  if (sender === 'Jednostka OSP') {
-    sender = u?.station || sender;
-  }
+  const sender = selectedSender === 'Jednostka OSP'
+    ? (unit?.station || 'OSP')
+    : selectedSender;
 
-  addMessage(
-    sender,
-    text,
-    sender === 'SKKM Lublin' ? (u?.station || '') : 'SKKM Lublin'
-  );
-
+  addMessage(sender, text, 'kanał zdarzenia');
   $('#radioText').value = '';
-};
+  $('#radioText').focus();
+});
 
-$('#radioText').addEventListener('keydown', e => {
-  if (e.key === 'Enter') $('#sendRadio').click();
+$('#radioText').addEventListener('keydown', event => {
+  if (event.key === 'Enter') {
+    event.preventDefault();
+    $('#sendRadio').click();
+  }
 });
 
 function openDispatch() {
-  const e = events.find(x => x.id === selected);
+  const event = events.find(item => item.id === selected);
 
-  if (!e) {
-    alert('Wybierz zdarzenie w tabeli.');
+  if (!event) {
+    alert('Najpierw wybierz zdarzenie w rejestrze.');
     return;
   }
 
   $('#dispatchTarget').textContent =
-    `Zdarzenie ${e.id} — ${e.town}, ${e.address}`;
+    `${event.id} — ${event.town}, ${event.address}`;
 
-  $('#dispatchList').innerHTML = units.map((u, i) => `
-    <label class="dispatch-item">
-      <span class="dot ${unitStatus(u)}"></span>
-      <span>
-        <b>${esc(u.name)}</b><br>
-        <small>${esc(u.group)} · ${esc(u.station)} · ${esc(u.status)}</small>
-      </span>
-      <input
-        type="checkbox"
-        value="${i}"
-        ${e.units.includes(i) ? 'checked' : ''}
-        ${u.status === 'Wyłączony' ? 'disabled' : ''}
-      >
-    </label>
-  `).join('');
+  $('#dispatchList').innerHTML = units.map((unit, index) => {
+    const assignedElsewhere = events.some(other =>
+      other.id !== event.id &&
+      other.status !== 'Zakończone' &&
+      other.units.includes(index)
+    );
+
+    const unavailable =
+      unit.status === 'Wyłączony' ||
+      (assignedElsewhere && !event.units.includes(index));
+
+    return `
+      <label class="dispatch-item">
+        <span class="dot ${unitStatus(unit)}"></span>
+        <span>
+          <b>${esc(unit.name)}</b><br>
+          <small>${esc(unit.group)} · ${esc(unit.station)} · ${esc(
+            assignedElsewhere && !event.units.includes(index)
+              ? 'Zadysponowany do innego zdarzenia'
+              : unit.status
+          )}</small>
+        </span>
+        <input
+          type="checkbox"
+          value="${index}"
+          ${event.units.includes(index) ? 'checked' : ''}
+          ${unavailable ? 'disabled' : ''}
+        >
+      </label>
+    `;
+  }).join('');
 
   $('#dispatchModal').classList.remove('hidden');
 }
 
-$('#dispatchBtn').onclick = openDispatch;
+$('#dispatchBtn').addEventListener('click', openDispatch);
 
-$('#closeDispatch').onclick = () => {
+function closeDispatchModal() {
   $('#dispatchModal').classList.add('hidden');
-};
+}
 
-$('#cancelDispatch').onclick = () => {
-  $('#dispatchModal').classList.add('hidden');
-};
+$('#closeDispatch').addEventListener('click', closeDispatchModal);
+$('#cancelDispatch').addEventListener('click', closeDispatchModal);
 
-$('#saveDispatch').onclick = () => {
-  const e = events.find(x => x.id === selected);
-  if (!e) return;
+$('#saveDispatch').addEventListener('click', () => {
+  const event = events.find(item => item.id === selected);
+
+  if (!event) return;
+
+  const previous = [...event.units];
 
   const chosen = $$('#dispatchList input:checked')
-    .map(x => Number(x.value));
+    .map(input => Number(input.value));
 
-  units.forEach((u, i) => {
-    if (e.units.includes(i) && !chosen.includes(i)) {
-      u.status = 'Gotowy';
-    }
+  previous.forEach(index => {
+    if (!chosen.includes(index) && units[index]) {
+      const assignedElsewhere = events.some(other =>
+        other.id !== event.id &&
+        other.status !== 'Zakończone' &&
+        other.units.includes(index)
+      );
 
-    if (chosen.includes(i)) {
-      u.status = 'Zadysponowany';
+      if (!assignedElsewhere) {
+        units[index].status = 'Gotowy';
+      }
     }
   });
 
-  e.units = chosen;
+  chosen.forEach(index => {
+    if (units[index]) {
+      units[index].status = 'Zadysponowany';
+    }
+  });
 
-  // Po zadysponowaniu zdarzenie przechodzi do obsługi.
-  if (chosen.length > 0 && getStatusClass(e.status) === 'status-new') {
-    e.status = 'W toku';
+  event.units = chosen;
+
+  if (chosen.length > 0 && statusClass(event.status) === 'status-new') {
+    event.status = 'W toku';
   }
 
-  $('#dispatchModal').classList.add('hidden');
+  closeDispatchModal();
   renderAll();
 
   addMessage(
     'SKKM Lublin',
-    `Dysponuję siły i środki do zdarzenia ${e.id} w miejscowości ${e.town}.`,
-    'wybrane jednostki'
+    chosen.length
+      ? `Zadysponowano ${chosen.length} zastępów do zdarzenia ${event.id}.`
+      : `Usunięto dyspozycję zastępów dla zdarzenia ${event.id}.`,
+    'kanał zdarzenia'
   );
-};
+});
 
-$('#finishBtn').onclick = () => {
-  const e = events.find(x => x.id === selected);
+function updateEventStatus(newStatus) {
+  const event = events.find(item => item.id === selected);
 
-  if (!e) {
-    alert('Wybierz zdarzenie w tabeli.');
+  if (!event) {
+    alert('Najpierw wybierz zdarzenie.');
     return;
   }
 
-  e.status = 'Zakończone';
+  if (event.status === 'Zakończone') {
+    alert('Zdarzenie zostało już zakończone.');
+    return;
+  }
 
-  e.units.forEach(i => {
-    if (units[i]) units[i].status = 'Gotowy';
-  });
+  event.status = newStatus;
 
-  e.units = [];
+  if (newStatus === 'Zakończone') {
+    event.units.forEach(index => {
+      if (!units[index]) return;
+
+      const assignedElsewhere = events.some(other =>
+        other.id !== event.id &&
+        other.status !== 'Zakończone' &&
+        other.units.includes(index)
+      );
+
+      if (!assignedElsewhere) {
+        units[index].status = 'Gotowy';
+      }
+    });
+
+    event.units = [];
+  }
 
   renderAll();
 
   addMessage(
     'SKKM Lublin',
-    `Zdarzenie ${e.id} zakończone.`,
-    ''
+    `Zmieniono status zdarzenia ${event.id} na: ${newStatus}.`,
+    'kanał zdarzenia'
   );
-};
+}
 
-$$('[data-tab]').forEach(b => {
-  b.onclick = () => {
-    $$('[data-tab]').forEach(x => {
-      x.classList.toggle('active', x === b);
+$('#controlBtn').addEventListener('click', () => {
+  updateEventStatus('Opanowane');
+});
+
+$('#finishBtn').addEventListener('click', () => {
+  updateEventStatus('Zakończone');
+});
+
+$$('[data-tab]').forEach(button => {
+  button.addEventListener('click', () => {
+    $$('[data-tab]').forEach(tab => {
+      tab.classList.toggle('active', tab === button);
     });
 
-    document.body.dataset.tab = b.dataset.tab;
+    document.body.dataset.tab = button.dataset.tab;
     renderUnits();
-  };
+  });
 });
 
 function tick() {
