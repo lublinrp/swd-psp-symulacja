@@ -1,40 +1,251 @@
+
 <!doctype html>
-<html lang="pl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>SWD PSP — Symulator</title><link rel="stylesheet" href="style.css"></head>
+<html lang="pl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>SWD PSP — Stanowisko Kierowania</title>
+  <link rel="stylesheet" href="style.css">
+</head>
 <body>
 <div class="window">
-<header class="titlebar"><span class="appicon">✚</span><strong>SWD PSP — Stanowisko Kierowania (symulacja)</strong><span class="window-actions">—　□　×</span></header>
-<nav class="menubar"><button>System</button><button>Widok</button><button>Rejestr Wyjazdów</button><button>Ewid.</button><button>Siły i środki</button><button>Mapy</button><button>Podział Bojowy</button><button>Zestawienia i raporty</button><button>Urządzenia</button><button>Okna</button><button>Komunikator</button><button>Pomoc</button></nav>
-<div class="tabs"><button class="active" data-tab="PSP">PSP</button><button data-tab="OSP">OSP</button><span class="hint">SYMULATOR NIEZALEŻNY • DANE LOKALNE</span></div>
-<section class="units-area" id="unitColumns"></section>
-<div class="split-label"><span>Utwórz kartę zdarzenia</span><button id="newEvent">＋ Nowa Karta Zdarzenia</button><span class="grow"></span><label>Szukaj <input id="search" placeholder="nr, miejscowość, opis…"></label></div>
-<main class="lower">
-<section class="events-section">
-<div class="section-caption">Zdarzenia z własnym udziałem / Rejestr zgłoszeń</div>
-<div class="table-scroll"><table class="event-table"><thead><tr><th>ID zdarzenia</th><th>Data/Godzina</th><th>KP/KM</th><th>Miejsce</th><th>Zastępy</th><th>Rodzaj</th><th>Opis</th><th>Status</th></tr></thead><tbody id="eventsBody"></tbody></table></div>
-<div class="lower-controls"><button id="dispatchBtn">Dyspozycja</button><button id="finishBtn">Zakończ zdarzenie</button><span id="selectedInfo">Wybierz zdarzenie z tabeli</span></div>
-</section>
-<section class="right-section">
-<div class="right-heading">Szczegóły zdarzenia <span id="detailNo">—</span></div>
-<div id="details" class="details"><p>Wybierz zdarzenie, aby zobaczyć szczegóły.</p></div>
-<div class="radio-heading">Korespondencja radiowa <span id="radioEvent">brak zdarzenia</span></div>
-<div id="radioLog" class="radio-log"></div>
-<div class="radio-controls">
-<label>Jednostka <select id="radioUnit"></select></label>
-<div class="quick-row"><button data-radio="Zgłaszam się!">Zgłaszam się!</button><button data-radio="Odbiór!">Odbiór!</button><button data-radio="Zgłaszam wyjazd średniego do zdarzenia według dyspozycji.">Wyjazd średniego</button></div>
-<div class="quick-row"><button data-radio="Przyjąłem">Przyjąłem</button><button data-radio="Prawidłowo">Prawidłowo</button><button data-radio="Zrozumiałem">Zrozumiałem</button></div>
-<div class="send-row"><select id="radioSender"><option value="SKKM Lublin">Dyspozytor / SKKM Lublin</option><option value="OSP Moszenki">Jednostka OSP</option></select><input id="radioText" placeholder="Wpisz własny meldunek…"><button id="sendRadio">Wyślij</button></div>
+  <header class="titlebar">
+    <span class="appicon">✚</span>
+    <strong>SWD PSP — Stanowisko Kierowania</strong>
+    <span class="window-actions">—　□　×</span>
+  </header>
+
+  <nav class="menubar">
+    <button type="button">System</button>
+    <button type="button">Widok</button>
+    <button type="button">Rejestr zdarzeń</button>
+    <button type="button">Rejestr wyjazdów</button>
+    <button type="button">Siły i środki</button>
+    <button type="button">Raporty</button>
+    <button type="button">Pomoc</button>
+  </nav>
+
+  <section class="toolbar">
+    <button type="button" id="newEvent">＋ Przyjmij zgłoszenie</button>
+    <button type="button" id="dispatchBtn">Dyspozycja sił i środków</button>
+    <button type="button" id="controlBtn">Oznacz jako opanowane</button>
+    <button type="button" id="finishBtn">Zakończ zdarzenie</button>
+    <span class="toolbar-spacer"></span>
+    <span id="connectionStatus">● Tryb lokalny</span>
+  </section>
+
+  <section class="readiness">
+    <div class="panel-heading">
+      <strong>Tablica gotowości bojowej</strong>
+      <span id="unitCount">4 zastępy</span>
+    </div>
+
+    <div class="tabs">
+      <button class="active" type="button" data-tab="PSP">PSP</button>
+      <button type="button" data-tab="OSP">OSP</button>
+    </div>
+
+    <div id="unitColumns" class="unit-columns"></div>
+  </section>
+
+  <main class="workspace">
+    <section class="events-section panel">
+      <div class="panel-heading">
+        <strong>Rejestr zgłoszeń / zdarzeń</strong>
+        <label class="search-label">
+          Szukaj:
+          <input id="search" type="search" placeholder="Numer, miejscowość, opis...">
+        </label>
+      </div>
+
+      <div class="table-scroll">
+        <table class="event-table">
+          <thead>
+            <tr>
+              <th>Nr zdarzenia</th>
+              <th>Data i godzina</th>
+              <th>Miejscowość / adres</th>
+              <th>Rodzaj</th>
+              <th>Opis zdarzenia</th>
+              <th>Zastępy</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody id="eventsBody"></tbody>
+        </table>
+      </div>
+
+      <div class="legend">
+        <span><i class="legend-color new"></i> Nowe zgłoszenie</span>
+        <span><i class="legend-color progress"></i> W toku</span>
+        <span><i class="legend-color controlled"></i> Opanowane</span>
+        <span><i class="legend-color finished"></i> Zakończone</span>
+      </div>
+    </section>
+
+    <aside class="side-panel">
+      <section class="panel event-details">
+        <div class="panel-heading">
+          <strong>Karta zdarzenia</strong>
+          <span id="detailNo">—</span>
+        </div>
+        <div id="details" class="details">
+          <p>Wybierz zdarzenie z rejestru.</p>
+        </div>
+      </section>
+
+      <section class="panel radio-panel">
+        <div class="panel-heading">
+          <strong>Korespondencja radiowa</strong>
+          <span id="radioEvent">Brak zdarzenia</span>
+        </div>
+
+        <div id="radioLog" class="radio-log">
+          <span>Brak korespondencji.</span>
+        </div>
+
+        <div class="radio-controls">
+          <label>
+            Nadający
+            <select id="radioSender">
+              <option value="SKKM Lublin">SKKM Lublin — dyspozytor</option>
+              <option value="Jednostka OSP">Jednostka OSP</option>
+              <option value="JRG 1 Lublin">JRG 1 Lublin</option>
+            </select>
+          </label>
+
+          <label>
+            Jednostka
+            <select id="radioUnit"></select>
+          </label>
+
+          <div class="send-row">
+            <input id="radioText" type="text" placeholder="Treść meldunku...">
+            <button type="button" id="sendRadio">Wyślij</button>
+          </div>
+
+          <div class="quick-row">
+            <button type="button" data-radio="Zgłaszam wyjazd do zdarzenia.">Wyjazd</button>
+            <button type="button" data-radio="Przybyłem na miejsce zdarzenia.">Przybycie</button>
+            <button type="button" data-radio="Sytuacja opanowana.">Opanowane</button>
+          </div>
+        </div>
+      </section>
+    </aside>
+  </main>
+
+  <footer class="statusbar">
+    <span>SWD PSP — symulator szkoleniowy</span>
+    <span id="selectedInfo">Nie wybrano zdarzenia</span>
+    <span id="clock"></span>
+  </footer>
 </div>
-</section>
-</main>
-<footer><span>SWD PSP • Symulacja szkoleniowa</span><span>Stan połączenia: <b class="green">● lokalny</b></span><span id="clock"></span></footer>
+
+<!-- Okno przyjęcia zgłoszenia -->
+<div class="modal hidden" id="eventModal">
+  <form id="eventForm" class="modal-window">
+    <header>
+      <strong>Nowe zgłoszenie — karta zdarzenia</strong>
+      <button type="button" id="closeModal">×</button>
+    </header>
+
+    <div class="form-content">
+      <fieldset>
+        <legend>Przyjęcie zgłoszenia</legend>
+        <label>Data
+          <input name="date" type="date" required>
+        </label>
+        <label>Godzina
+          <input name="time" type="time" required>
+        </label>
+        <label>Kanał zgłoszenia
+          <select name="channel">
+            <option>Telefon</option>
+            <option>Radio</option>
+            <option>System alarmowy</option>
+            <option>Osobiście</option>
+          </select>
+        </label>
+        <label>Jednostka przyjmująca
+          <input name="lead" value="SKKM Lublin" required>
+        </label>
+      </fieldset>
+
+      <fieldset>
+        <legend>Lokalizacja zdarzenia</legend>
+        <label>Miejscowość
+          <input name="town" required>
+        </label>
+        <label>Ulica i numer
+          <input name="address" required>
+        </label>
+        <label>Obiekt
+          <input name="object">
+        </label>
+      </fieldset>
+
+      <fieldset>
+        <legend>Dane zgłaszającego</legend>
+        <label>Imię i nazwisko
+          <input name="caller">
+        </label>
+        <label>Numer telefonu
+          <input name="phone" type="tel">
+        </label>
+      </fieldset>
+
+      <fieldset>
+        <legend>Informacje o zdarzeniu</legend>
+        <label>Rodzaj zdarzenia
+          <select name="type" required>
+            <option value="P">P — Pożar</option>
+            <option value="MZ">MZ — Miejscowe zagrożenie</option>
+            <option value="AF">AF — Alarm fałszywy</option>
+            <option value="CW">CW — Ćwiczenia</option>
+          </select>
+        </label>
+        <label>Opis zgłoszenia
+          <textarea name="description" rows="4" required></textarea>
+        </label>
+        <label>Dodatkowe informacje
+          <textarea name="notes" rows="2"></textarea>
+        </label>
+      </fieldset>
+
+      <fieldset>
+        <legend>Powiadomione służby</legend>
+        <label class="check"><input type="checkbox" name="prm"> PRM</label>
+        <label class="check"><input type="checkbox" name="police"> Policja</label>
+        <label class="check"><input type="checkbox" name="gas"> Pogotowie gazowe</label>
+        <label class="check"><input type="checkbox" name="energy"> Pogotowie energetyczne</label>
+      </fieldset>
+    </div>
+
+    <div class="form-actions">
+      <button type="button" id="cancelModal">Anuluj</button>
+      <button type="submit" class="primary">Przyjmij zgłoszenie</button>
+    </div>
+  </form>
 </div>
-<div class="modal hidden" id="eventModal"><form id="eventForm"><header>✚　Nowa Karta Zdarzenia <button type="button" id="closeModal">×</button></header><div class="form-content">
-<fieldset><legend>Czas</legend><label>Data <input name="date" type="date" required></label><label>Godzina <input name="time" type="time" required></label><label>Przyjęto <select name="channel"><option>Telefon</option><option>Radio</option><option>Osobiście</option><option>System alarmowy</option></select></label><label>Jednostka przyjmująca <input name="station" value="JRG 1 Lublin"></label></fieldset>
-<fieldset><legend>Lokalizacja</legend><label>Gmina/pow./woj. <input name="county"></label><label>Miejscowość <input name="town" required></label><label>Adres <input name="address" required></label><label>Obiekt <input name="object"></label></fieldset>
-<fieldset><legend>Dane zgłaszającego</legend><label>Imię i nazwisko <input name="caller"></label><label>Nr telefonu <input name="phone"></label></fieldset>
-<fieldset><legend>Informacje dodatkowe — opis zdarzenia</legend><textarea name="description" rows="4" required></textarea><label>Dodatkowe informacje <input name="notes"></label></fieldset>
-<fieldset><legend>Zdarzenie</legend><label>Rodzaj zdarzenia <select name="type"><option value="P">P — Pożar</option><option value="MZ">MZ — Miejscowe zagrożenie</option><option value="AF">AF — Alarm fałszywy</option><option value="CW">CW — Ćwiczenia</option><option value="WG">WG — Wypadek</option><option value="BL">BL — Budowlane</option><option value="ZPR">ZPR</option><option value="PZR">PZR</option></select></label><label>Priorytet <select name="priority"><option>Normalny</option><option>Pilny</option></select></label><label>Jednostka prowadząca <input name="lead" value="JRG 1 Lublin"></label></fieldset>
-<fieldset><legend>Powiadomione służby</legend><label class="check"><input type="checkbox" name="prm"> PRM</label><label class="check"><input type="checkbox" name="police"> Policja</label><label class="check"><input type="checkbox" name="gas"> Pogotowie gazowe</label><label class="check"><input type="checkbox" name="energy"> Pogotowie energetyczne</label><label class="check"><input type="checkbox" name="water"> Pogotowie wodociągowe</label><label class="check"><input type="checkbox" name="city"> Straż Miejska</label></fieldset>
-</div><div class="form-actions"><button type="button" id="cancelModal">Anuluj</button><button class="save" type="submit">Zapisz</button></div></form></div>
-<div class="modal hidden" id="dispatchModal"><section><header>Dyspozycja sił i środków <button id="closeDispatch">×</button></header><p id="dispatchTarget"></p><div id="dispatchList"></div><div class="form-actions"><button id="cancelDispatch">Anuluj</button><button class="save" id="saveDispatch">Zadysponuj wybrane</button></div></section></div>
-<script src="app.js"></script></body></html>
+
+<!-- Okno dysponowania zastępów -->
+<div class="modal hidden" id="dispatchModal">
+  <section class="modal-window dispatch-window">
+    <header>
+      <strong>Dysponowanie sił i środków</strong>
+      <button type="button" id="closeDispatch">×</button>
+    </header>
+
+    <p id="dispatchTarget"></p>
+    <div id="dispatchList" class="dispatch-list"></div>
+
+    <div class="form-actions">
+      <button type="button" id="cancelDispatch">Anuluj</button>
+      <button type="button" id="saveDispatch" class="primary">Zatwierdź dyspozycję</button>
+    </div>
+  </section>
+</div>
+
+<script src="app.js"></script>
+</body>
+</html>
